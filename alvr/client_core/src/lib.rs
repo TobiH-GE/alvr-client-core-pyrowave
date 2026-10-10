@@ -363,6 +363,18 @@ impl ClientCoreContext {
         *self.connection_context.state.write() = ConnectionState::Disconnecting;
     }
 
+    /// The head pose sent with the tracking of this timestamp, as the streamer got it (after the
+    /// prediction in send_tracking()), without side effects. None once it left the queue.
+    pub fn sent_head_pose(&self, timestamp: Duration) -> Option<Pose> {
+        self.connection_context
+            .head_pose_queue
+            .read()
+            .iter()
+            .rev()
+            .find(|(ts, _)| *ts == timestamp)
+            .map(|(_, pose)| *pose)
+    }
+
     pub fn report_compositor_start(&self, timestamp: Duration) -> [ViewParams; 2] {
         dbg_client_core!("report_compositor_start");
 

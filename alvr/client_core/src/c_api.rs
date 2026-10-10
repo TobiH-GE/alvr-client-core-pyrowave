@@ -789,6 +789,19 @@ pub unsafe extern "C" fn alvr_report_compositor_start(
     }
 }
 
+/// The head pose the streamer got with the tracking of this timestamp (the client core predicts
+/// the pose it is given before sending it). Returns false if it is not known (any more).
+#[no_mangle]
+pub unsafe extern "C" fn alvr_get_sent_head_pose(target_timestamp_ns: u64, out_pose: *mut AlvrPose) -> bool {
+    if let Some(context) = &*CLIENT_CORE_CONTEXT.lock() {
+        if let Some(pose) = context.sent_head_pose(Duration::from_nanos(target_timestamp_ns)) {
+            *out_pose = to_capi_pose(pose);
+            return true;
+        }
+    }
+    false
+}
+
 #[no_mangle]
 pub extern "C" fn alvr_report_submit(target_timestamp_ns: u64, vsync_queue_ns: u64) {
     if let Some(context) = &*CLIENT_CORE_CONTEXT.lock() {

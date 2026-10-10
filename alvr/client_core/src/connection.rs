@@ -58,6 +58,10 @@ const CONNECTION_TIMEOUT_MESSAGE: &str = "Connection timeout.";
 const DISCOVERY_RETRY_PAUSE: Duration = Duration::from_millis(500);
 const RETRY_CONNECT_MIN_INTERVAL: Duration = Duration::from_secs(1);
 const CONNECTION_RETRY_INTERVAL: Duration = Duration::from_secs(1);
+
+// Local address of the current connection to the streamer. The HUD shows it instead of
+// local_ip(), which reports the default route (Wi-Fi) even when the stream runs over Ethernet.
+static CONNECTED_LOCAL_IP: RwLock<Option<std::net::IpAddr>> = RwLock::new(None);
 const HANDSHAKE_ACTION_TIMEOUT: Duration = Duration::from_secs(2);
 const STREAMING_RECV_TIMEOUT: Duration = Duration::from_millis(500);
 
@@ -91,7 +95,9 @@ fn set_hud_message(event_queue: &Mutex<VecDeque<ClientCoreEvent>>, message: &str
         "ALVR v{}\nhostname: {}\nIP: {}\n\n{message}",
         *ALVR_VERSION,
         Config::load().hostname,
-        alvr_system_info::local_ip(),
+        CONNECTED_LOCAL_IP
+            .read()
+            .unwrap_or_else(alvr_system_info::local_ip),
     );
 
     event_queue
@@ -129,6 +135,7 @@ pub fn connection_lifecycle_loop(
             debug!("Skip try connection because the device is sleeping");
         }
 
+        *CONNECTED_LOCAL_IP.write() = None;
         *ctx.state.write() = ConnectionState::Disconnected;
         ctx.disconnected_notif.notify_all();
 
@@ -170,6 +177,7 @@ fn connection_pipeline(
                 DISCOVERY_RETRY_PAUSE,
                 PeerType::Server(&listener_socket),
             ) {
+                *CONNECTED_LOCAL_IP.write() = pair.0.local_ip();
                 set_hud_message(&event_queue, SUCCESS_CONNECT_MESSAGE);
                 break pair;
             }

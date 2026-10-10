@@ -167,6 +167,11 @@ impl ProtoControlSocket {
         Ok((Self { inner: socket }, peer_ip))
     }
 
+    // Address of this end of the connection, i.e. the interface the peer is reached over.
+    pub fn local_ip(&self) -> Option<IpAddr> {
+        self.inner.local_addr().ok().map(|a| a.ip())
+    }
+
     pub fn send<S: Serialize>(&mut self, packet: &S) -> Result<()> {
         framed_send(&mut self.inner, &mut vec![], packet)
     }
