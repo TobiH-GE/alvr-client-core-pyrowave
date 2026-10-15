@@ -9,6 +9,13 @@ use std::net::{IpAddr, Ipv4Addr, UdpSocket};
 // (2026-09-22). About three seconds for a streamer on the cable to answer before Wi-Fi is tried.
 const WIRED_ONLY_ROUNDS: u32 = 6;
 
+// Where to announce (alvr_set_announce_interfaces, the app's "Rescan" buttons): automatic (wired
+// first, then Wi-Fi as above), wired interfaces only, or Wi-Fi only. Read in every round.
+pub const ANNOUNCE_AUTO: u8 = 0;
+pub const ANNOUNCE_WIRED: u8 = 1;
+pub const ANNOUNCE_WIFI: u8 = 2;
+pub static ANNOUNCE_INTERFACES: std::sync::atomic::AtomicU8 = std::sync::atomic::AtomicU8::new(ANNOUNCE_AUTO);
+
 struct Interface {
     name: String,
     address: Ipv4Addr,
@@ -52,9 +59,14 @@ impl AnnouncerSocket {
         self.refresh_interfaces();
         self.rounds += 1;
 
+        let mode = ANNOUNCE_INTERFACES.load(std::sync::atomic::Ordering::Relaxed);
         let has_wired = self.interfaces.iter().any(|i| !i.is_wifi());
-        let wifi_too = !has_wired || self.rounds > WIRED_ONLY_ROUNDS;
-        if has_wired && self.rounds == WIRED_ONLY_ROUNDS + 1 {
+        let wifi_too = match mode {
+            ANNOUNCE_WIRED => false,
+            ANNOUNCE_WIFI => true,
+            _ => !has_wired || self.rounds > WIRED_ONLY_ROUNDS,
+        };
+        if mode == ANNOUNCE_AUTO && has_wired && self.rounds == WIRED_ONLY_ROUNDS + 1 {
             info!("No streamer answered on the wired interface(s), announcing on Wi-Fi too");
         }
 
@@ -62,6 +74,9 @@ impl AnnouncerSocket {
         let mut last_error = None;
         for interface in &self.interfaces {
             if interface.is_wifi() && !wifi_too {
+                continue;
+            }
+            if !interface.is_wifi() && mode == ANNOUNCE_WIFI {
                 continue;
             }
             match interface

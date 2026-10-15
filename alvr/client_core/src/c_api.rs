@@ -327,6 +327,16 @@ pub extern "C" fn alvr_resume() {
     }
 }
 
+/// Where the streamer is searched for from the next announcement round on: 0 automatic (wired
+/// interfaces first, Wi-Fi after a few seconds without an answer), 1 wired only (USB Ethernet
+/// adapter), 2 Wi-Fi only. Automatic after start; the app sets it before a rescan.
+#[no_mangle]
+pub extern "C" fn alvr_set_announce_interfaces(mode: u8) {
+    let mode = if mode > crate::sockets::ANNOUNCE_WIFI { crate::sockets::ANNOUNCE_AUTO } else { mode };
+    crate::sockets::ANNOUNCE_INTERFACES.store(mode, std::sync::atomic::Ordering::Relaxed);
+    info!("Announcing on: {}", ["automatic", "wired only", "Wi-Fi only"][mode as usize]);
+}
+
 #[no_mangle]
 pub extern "C" fn alvr_pause() {
     if let Some(context) = &*CLIENT_CORE_CONTEXT.lock() {

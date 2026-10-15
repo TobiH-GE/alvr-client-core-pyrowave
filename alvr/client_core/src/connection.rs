@@ -339,6 +339,19 @@ fn connection_pipeline(
                     return;
                 };
 
+                // Motion packets for the frame interpolation (PacketPrefix starting with 0xffff,
+                // the streamer's FrameMotion.h) are no video: one that lost a shard is dropped
+                // without asking for an IDR, and they count in no video statistics (with HEVC
+                // they arrive ahead of their frame).
+                if nal.starts_with(&[0xff, 0xff]) {
+                    if !data.had_packet_loss() {
+                        if let Some(callback) = ctx.decoder_callback.lock().as_mut() {
+                            callback(header.timestamp, nal);
+                        }
+                    }
+                    continue;
+                }
+
                 if let Some(stats) = &mut *ctx.statistics_manager.lock() {
                     stats.report_video_packet_received(header.timestamp);
                 }
